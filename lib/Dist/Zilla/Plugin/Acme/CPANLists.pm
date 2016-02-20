@@ -151,3 +151,5 @@ currently does the following:
 =head1 SEE ALSO
 
 L<Acme::CPANLists>
+
+L<Pod::Weaver::Plugin::Acme::CPANLists>
