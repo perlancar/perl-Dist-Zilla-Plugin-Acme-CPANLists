@@ -115,12 +115,42 @@ sub munge_file {
     }
 
     my $abstract = $self->_get_abstract_from_author_or_module_list($file->name, $file->content);
-    return unless $abstract;
 
-    $content =~ s{^#\s*ABSTRACT:.*}{# ABSTRACT: $abstract}m
-        or die "Can't insert abstract for " . $file->name;
-    $self->log(["inserting abstract for %s (%s)", $file->name, $abstract]);
-    $file->content($content);
+  ADD_X_MENTIONS_PREREQS:
+    {
+        my $pkg = do {
+            my $pkg = $file->name;
+            $pkg =~ s!^lib/!!;
+            $pkg =~ s!\.pm$!!;
+            $pkg =~ s!/!::!g;
+            $pkg;
+        };
+        no strict 'refs';
+        #my $author_lists = \@{"$pkg\::Author_Lists"};
+        my $module_lists = \@{"$pkg\::Module_Lists"};
+        my @mods;
+        for my $module_list (@$module_lists) {
+            for my $entry (@{ $module_list->{entries} }) {
+                push @mods, $entry->{module};
+                for (@{ $entry->{alternate_modules} || [] }) {
+                    push @mods, $_;
+                }
+            }
+        }
+        for my $mod (@mods) {
+            $self->zilla->register_prereqs(
+                {phase=>'x_mentions', type=>'x_mentions'}, $mod, 0);
+        }
+    }
+
+  SET_ABSTRACT:
+    {
+        last unless $abstract;
+        $content =~ s{^#\s*ABSTRACT:.*}{# ABSTRACT: $abstract}m
+            or die "Can't insert abstract for " . $file->name;
+        $self->log(["inserting abstract for %s (%s)", $file->name, $abstract]);
+        $file->content($content);
+    }
 }
 
 __PACKAGE__->meta->make_immutable;
@@ -144,6 +174,8 @@ currently does the following:
 =over
 
 =item * Fill the Abstract from the first module/author list's summary
+
+=item * Add prereq to the mentioned modules (phase=x_mentions, relationship=x_mentions)
 
 =back
 
